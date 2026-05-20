@@ -241,13 +241,14 @@ export function MainView() {
     const backend = (window as any).backend;
     if (!backend) return;
     setIsFetchingGit(true);
-    showToast('Buscando actualizaciones remotas...');
+    showToast('Buscando actualizaciones y cambios locales...');
     try {
       if (backend.git_fetch) {
         await backend.git_fetch(projectPath);
       }
-      await checkGitSyncStatus(projectPath);
-      showToast('Estado de Git actualizado');
+      // Recargar archivos locales para detectar modificaciones pendientes de push
+      await loadProjectData(projectPath);
+      showToast('Proyecto actualizado: cambios locales y remotos sincronizados');
     } catch (e) {
       console.error(e);
       showToast('Error al buscar actualizaciones');
