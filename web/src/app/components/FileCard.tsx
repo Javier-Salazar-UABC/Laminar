@@ -8,6 +8,7 @@ interface FileCardProps {
   onClick?: () => void;
   onToggleSelection?: (id: string) => void;
   hideBadge?: boolean;
+  isSelectedForPush?: boolean;
 }
 
 const fileTypeColors: Record<string, string> = {
@@ -151,11 +152,13 @@ const StatusBadge = ({ status }: { status: string }) => {
   return null;
 };
 
-export function FileCard({ file, onSelect, onClick, onToggleSelection, hideBadge }: FileCardProps) {
+export function FileCard({ file, onSelect, onClick, onToggleSelection, hideBadge, isSelectedForPush }: FileCardProps) {
   const isModified = file.status === 'modified';
-  const isSelected = file.status === 'selected';
+  const isSelected = !!isSelectedForPush;
   const isError = file.status === 'error';
   const hasStatus = file.status !== 'normal' && !hideBadge;
+  
+  const canSelect = file.status !== 'uptodate' && !hideBadge;
   
   const borderStyle = isSelected 
     ? `2px solid var(--violet)`
@@ -196,31 +199,33 @@ export function FileCard({ file, onSelect, onClick, onToggleSelection, hideBadge
       onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
     >
       {/* Checkbox for selection */}
-      <div 
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-        style={{ opacity: isSelected ? 1 : undefined }}
-      >
-        <div
-          onClick={handleCheckboxClick}
-          className="w-5 h-5 rounded flex items-center justify-center cursor-pointer"
-          style={{
-            backgroundColor: isSelected ? 'var(--violet)' : 'var(--bg-primary)',
-            border: `1.5px solid ${isSelected ? 'var(--violet)' : 'var(--border-color)'}`
-          }}
+      {canSelect && (
+        <div 
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          style={{ opacity: isSelected ? 1 : undefined }}
         >
-          {isSelected && (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M10 3L4.5 8.5L2 6"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+          <div
+            onClick={handleCheckboxClick}
+            className="w-5 h-5 rounded flex items-center justify-center cursor-pointer"
+            style={{
+              backgroundColor: isSelected ? 'var(--violet)' : 'var(--bg-primary)',
+              border: `1.5px solid ${isSelected ? 'var(--violet)' : 'var(--border-color)'}`
+            }}
+          >
+            {isSelected && (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path
+                  d="M10 3L4.5 8.5L2 6"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       
       <div className="flex items-start gap-3 mb-3">
         <FileIcon type={file.type} />

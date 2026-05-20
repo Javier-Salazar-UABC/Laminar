@@ -1,26 +1,92 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { Settings, GitBranch, ExternalLink, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 
 interface ProjectSettingsProps {
+  projectPath: string | null;
+  isRepo: boolean;
   onClose: () => void;
+  onRepoChanged: (isRepo: boolean) => void;
 }
 
-export function ProjectSettings({ onClose }: ProjectSettingsProps) {
-  const [hasGit, setHasGit] = useState(false);
+export function ProjectSettings({ projectPath, isRepo, onClose, onRepoChanged }: ProjectSettingsProps) {
+  const [hasGit, setHasGit] = useState(isRepo);
   const [hasGitHub, setHasGitHub] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
-  
-  const handleGitInit = () => {
-    setHasGit(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const projectName = projectPath ? projectPath.split('/').pop() : 'Sin proyecto';
+
+  useEffect(() => {
+    const fetchRemote = async () => {
+      if (!projectPath) return;
+      const backend = (window as any).backend;
+      if (backend && backend.git_get_remote) {
+        setIsLoading(true);
+        try {
+          const url = await backend.git_get_remote(projectPath);
+          if (url) {
+            setGithubUrl(url);
+            setHasGitHub(true);
+          }
+        } catch (e) {
+          console.error("Error al obtener la URL remota:", e);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    fetchRemote();
+  }, [projectPath]);
+
+  const handleGitInit = async () => {
+    if (!projectPath) return;
+    const backend = (window as any).backend;
+    if (backend && backend.git_init) {
+      setIsLoading(true);
+      setErrorMessage('');
+      try {
+        const success = await backend.git_init(projectPath);
+        if (success) {
+          setHasGit(true);
+          onRepoChanged(true);
+        } else {
+          setErrorMessage('No se pudo inicializar el repositorio Git.');
+        }
+      } catch (err: any) {
+        setErrorMessage(err.message || 'Error al ejecutar git init.');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setHasGit(true);
+    }
   };
-  
-  const handleLinkGitHub = () => {
-    if (githubUrl.trim()) {
+
+  const handleLinkGitHub = async () => {
+    if (!githubUrl.trim() || !projectPath) return;
+    const backend = (window as any).backend;
+    if (backend && backend.git_set_remote) {
+      setIsLoading(true);
+      setErrorMessage('');
+      try {
+        const success = await backend.git_set_remote(projectPath, githubUrl.trim());
+        if (success) {
+          setHasGitHub(true);
+        } else {
+          setErrorMessage('No se pudo vincular la URL del repositorio remoto.');
+        }
+      } catch (err: any) {
+        setErrorMessage(err.message || 'Error al guardar el remoto.');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
       setHasGitHub(true);
     }
   };
-  
+
   return (
     <>
       {/* Overlay */}
@@ -87,8 +153,8 @@ export function ProjectSettings({ onClose }: ProjectSettingsProps) {
                   <p className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
                     Nombre
                   </p>
-                  <p style={{ color: 'var(--text-main)' }}>
-                    proyecto-ingenieria
+                  <p style={{ color: 'var(--text-main)', fontWeight: 500 }}>
+                    {projectName}
                   </p>
                 </div>
                 <div>
@@ -101,8 +167,9 @@ export function ProjectSettings({ onClose }: ProjectSettingsProps) {
                       color: 'var(--text-main)',
                       fontFamily: 'var(--font-family-mono)'
                     }}
+                    title={projectPath || ''}
                   >
-                    C:/Users/usuario/Documents/proyecto-ingenieria
+                    {projectPath || 'No definido'}
                   </p>
                 </div>
               </div>
@@ -122,6 +189,19 @@ export function ProjectSettings({ onClose }: ProjectSettingsProps) {
               CONTROL DE VERSIONES
             </h3>
             
+            {errorMessage && (
+              <div 
+                className="p-3 mb-4 rounded-[var(--radius-input)] text-xs border"
+                style={{ 
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  borderColor: 'rgba(239, 68, 68, 0.3)',
+                  color: '#f87171'
+                }}
+              >
+                {errorMessage}
+              </div>
+            )}
+
             {/* Estado: Sin Git */}
             {!hasGit && (
               <div
@@ -137,9 +217,9 @@ export function ProjectSettings({ onClose }: ProjectSettingsProps) {
                     <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
                       Esta carpeta no está vinculada a un repositorio Git. Inicializa uno para habilitar la función de sincronización.
                     </p>
-                    <Button variant="outline" onClick={handleGitInit}>
+                    <Button variant="outline" onClick={handleGitInit} disabled={isLoading}>
                       <GitBranch className="w-4 h-4" />
-                      Inicializar Git (git init)
+                      {isLoading ? 'Inicializando...' : 'Inicializar Git (git init)'}
                     </Button>
                   </div>
                 </div>
@@ -177,10 +257,11 @@ export function ProjectSettings({ onClose }: ProjectSettingsProps) {
                           color: 'var(--text-main)',
                           fontFamily: 'var(--font-family-mono)'
                         }}
+                        disabled={isLoading}
                       />
-                      <Button variant="outline" onClick={handleLinkGitHub}>
+                      <Button variant="outline" onClick={handleLinkGitHub} disabled={isLoading || !githubUrl.trim()}>
                         <ExternalLink className="w-4 h-4" />
-                        Vincular
+                        {isLoading ? 'Vinculando...' : 'Vincular'}
                       </Button>
                     </div>
                   </div>
@@ -204,7 +285,7 @@ export function ProjectSettings({ onClose }: ProjectSettingsProps) {
                       Repositorio configurado correctamente
                     </p>
                     <p 
-                      className="text-sm"
+                      className="text-sm mb-3"
                       style={{ 
                         color: 'var(--text-secondary)',
                         fontFamily: 'var(--font-family-mono)'
@@ -212,6 +293,13 @@ export function ProjectSettings({ onClose }: ProjectSettingsProps) {
                     >
                       {githubUrl}
                     </p>
+                    <button
+                      onClick={() => setHasGitHub(false)}
+                      className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                      disabled={isLoading}
+                    >
+                      Cambiar URL del repositorio
+                    </button>
                   </div>
                 </div>
               </div>

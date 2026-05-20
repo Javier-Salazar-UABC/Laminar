@@ -372,6 +372,85 @@ class Backend(QObject):
             print(f"Error en ejecución Git: {e}")
             self.git_sync_progress.emit(json.dumps({"status": "error", "message": str(e)}))
 
+    @pyqtSlot(str, result='QVariant')
+    def git_check_sync_status(self, project_path):
+        if not project_path or not os.path.exists(project_path):
+            return {"behind": 0, "ahead": 0}
+        
+        is_repo = os.path.exists(os.path.join(project_path, ".git"))
+        if not is_repo:
+            return {"behind": 0, "ahead": 0}
+            
+        behind = 0
+        ahead = 0
+        try:
+            res = subprocess.run(
+                ["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if res.returncode == 0:
+                parts = res.stdout.strip().split()
+                if len(parts) == 2:
+                    ahead = int(parts[0])
+                    behind = int(parts[1])
+            else:
+                for default_branch in ["origin/main", "origin/master"]:
+                    res2 = subprocess.run(
+                        ["git", "rev-list", "--left-right", "--count", f"HEAD...{default_branch}"],
+                        cwd=project_path,
+                        capture_output=True,
+                        text=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+                    if res2.returncode == 0:
+                        parts = res2.stdout.strip().split()
+                        if len(parts) == 2:
+                            ahead = int(parts[0])
+                            behind = int(parts[1])
+                            break
+        except Exception as e:
+            print(f"Error checking sync status: {e}")
+            
+        return {"behind": behind, "ahead": ahead}
+
+    @pyqtSlot(str, result=bool)
+    def git_fetch(self, project_path):
+        if not project_path or not os.path.exists(project_path):
+            return False
+        try:
+            subprocess.run(
+                ["git", "fetch"],
+                cwd=project_path,
+                check=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            return True
+        except Exception as e:
+            print(f"Error running git fetch: {e}")
+            return False
+
+    @pyqtSlot(str, result=str)
+    def git_pull(self, project_path):
+        if not project_path or not os.path.exists(project_path):
+            return "Ruta de proyecto inválida."
+        try:
+            res = subprocess.run(
+                ["git", "pull"],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if res.returncode == 0:
+                return "success"
+            else:
+                return res.stderr.strip() or res.stdout.strip() or "Error al ejecutar git pull"
+        except Exception as e:
+            return str(e)
+
 class EdgeGrip(QWidget):
     def __init__(self, parent, edge):
         super().__init__(parent)
@@ -486,6 +565,15 @@ class MainWindow(QMainWindow):
                             },
                             git_set_remote: function(projectPath, remoteUrl) {
                                 return window.backend.git_set_remote(projectPath, remoteUrl);
+                            },
+                            git_check_sync_status: function(projectPath) {
+                                return window.backend.git_check_sync_status(projectPath);
+                            },
+                            git_fetch: function(projectPath) {
+                                return window.backend.git_fetch(projectPath);
+                            },
+                            git_pull: function(projectPath) {
+                                return window.backend.git_pull(projectPath);
                             }
                         }
                     };

@@ -1,5 +1,35 @@
 # Historial de Cambios - Laminar
 
+## [3.1.0] - Herramientas de Sincronización y Calidad de Vida (Fetch, Pull y Push Todo)
+**Fecha:** 20 de Mayo de 2026
+
+### Novedades Relevantes
+* **Widget de Control de Git en Tiempo Real:** Barra visual en la toolbar principal con indicadores dinámicos del estado remoto.
+* **Sincronización Total (Push Todo):** Botón verde "Sincronizar Todo" que permite preseleccionar todos los archivos con cambios locales de un solo clic y sincronizarlos juntos.
+* **Selección Masiva Inteligente:** Capacidad para seleccionar o deseleccionar todos los archivos modificados a la vez desde la barra de acciones flotante.
+* **Detección de Commits Entrantes (Behind) y Salientes (Ahead):** Notificación visual interactiva al usuario cuando hay commits nuevos disponibles para descargar en el servidor de GitHub.
+* **Carga de Proyectos Recientes en Pantalla de Inicio:** Resuelto un problema asíncrono (race condition) al iniciar la aplicación que impedía mostrar los proyectos recientes en la pantalla de bienvenida antes de inicializar por completo `QWebChannel`.
+
+### Documentación de Nuevas Funciones del Backend (Python)
+A continuación se detalla la implementación y funcionamiento de cada nueva función expuesta al frontend mediante la API de `pywebview`:
+
+1. **`git_check_sync_status(project_path)`**
+   * **Propósito:** Determinar cuántos commits locales están adelantados (`ahead`) o cuántos commits remotos están atrasados (`behind`) con respecto a la rama de origen.
+   * **Cómo funciona:** Ejecuta el comando `git rev-list --left-right --count HEAD...@{u}` para comparar la rama actual con su homóloga de seguimiento en el servidor remoto (`upstream`). Si no hay un `upstream` configurado, realiza un fallback probando secuencialmente contra `origin/main` y `origin/master`.
+   * **Retorno:** Un diccionario de Python con las claves `{"behind": int, "ahead": int}`.
+
+2. **`git_fetch(project_path)`**
+   * **Propósito:** Descargar la información más reciente de ramas, commits y etiquetas del repositorio remoto sin fusionar nada localmente.
+   * **Cómo funciona:** Ejecuta de forma asíncrona y silenciosa el comando `git fetch` dentro del directorio del proyecto actual.
+   * **Retorno:** Un valor booleano (`True` si se ejecutó exitosamente, `False` en caso de error).
+
+3. **`git_pull(project_path)`**
+   * **Propósito:** Descargar y fusionar los cambios de la rama remota directamente a la rama de trabajo local.
+   * **Cómo funciona:** Lanza el comando `git pull` en la carpeta del proyecto.
+   * **Retorno:** Retorna el string `"success"` si la fusión fue exitosa. En caso de error o conflicto de mezcla, captura los mensajes de salida de error (`stderr`) o salida estándar (`stdout`) de Git y los devuelve como un string descriptivo para mostrar en la interfaz.
+
+---
+
 ## [3.0.0] - Integración Real de Git y GitHub
 **Fecha:** 20 de Mayo de 2026
 

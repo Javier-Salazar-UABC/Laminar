@@ -9,14 +9,34 @@ export function Onboarding() {
   const [recentProjects, setRecentProjects] = useState<any[]>([]);
   
   useEffect(() => {
+    let intervalId: any;
+
     const fetchRecent = async () => {
       const backend = (window as any).backend;
       if (backend && backend.get_recent_projects) {
-        const projects = await backend.get_recent_projects();
-        setRecentProjects(projects);
+        try {
+          const projects = await backend.get_recent_projects();
+          setRecentProjects(projects || []);
+          if (intervalId) clearInterval(intervalId);
+        } catch (e) {
+          console.error("Error fetching projects:", e);
+        }
       }
     };
-    fetchRecent();
+
+    if ((window as any).backend) {
+      fetchRecent();
+    } else {
+      intervalId = setInterval(() => {
+        if ((window as any).backend) {
+          fetchRecent();
+        }
+      }, 50);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   const handleOpenFolder = async () => {

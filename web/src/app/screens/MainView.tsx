@@ -10,7 +10,7 @@ import { EditMetadataModal } from '../components/EditMetadataModal';
 import { GitPushModal } from '../components/GitPushModal';
 import { ProjectSettings } from '../components/ProjectSettings';
 import { mockFiles, folderStructure, FileMetadata, FolderNode } from '../data/mockData';
-import { Search, ChevronRight, Moon, Sun, X, Filter, Settings, LogOut, CheckCircle2, Edit3, Circle, Code2, Clock, AlertCircle, Sparkles, Archive } from 'lucide-react';
+import { Search, ChevronRight, Moon, Sun, X, Filter, Settings, LogOut, CheckCircle2, Edit3, Circle, Code2, Clock, AlertCircle, Sparkles, Archive, RefreshCw, Download, GitPullRequest } from 'lucide-react';
 
 export function MainView() {
   const navigate = useNavigate();
@@ -22,6 +22,8 @@ export function MainView() {
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showGitModal, setShowGitModal] = useState(false);
+  const [gitModalFiles, setGitModalFiles] = useState<FileMetadata[]>([]);
+  const [selectedForPush, setSelectedForPush] = useState<string[]>([]);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [projectPath, setProjectPath] = useState<string | null>(null);
@@ -29,6 +31,16 @@ export function MainView() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [recentProjects, setRecentProjects] = useState<any[]>([]);
+  
+  const [gitSyncInfo, setGitSyncInfo] = useState<{ behind: number; ahead: number }>({ behind: 0, ahead: 0 });
+  const [isFetchingGit, setIsFetchingGit] = useState(false);
+
+  const pendingPushFiles = useMemo(() => {
+    return files.filter(f => f.status === 'modified' || f.status === 'new');
+  }, [files]);
+  
+  const pendingPushCount = pendingPushFiles.length;
   
   // Estados de filtros
   const [filterType, setFilterType] = useState<string>('all');
@@ -81,7 +93,7 @@ export function MainView() {
   }, [files, activeFolder, searchQuery, filterType, filterStatus, filterTag]);
   
   // Contar archivos seleccionados
-  const selectedCount = files.filter(f => f.status === 'selected').length;
+  const selectedCount = selectedForPush.length;
   
   const hasActiveFilters = filterType !== 'all' || filterStatus !== 'all' || filterTag !== 'all';
   
@@ -111,37 +123,55 @@ export function MainView() {
   };
   
   const handleToggleFileSelection = (fileId: string) => {
-    setFiles(files.map(file => {
-      if (file.id === fileId) {
-        return {
-          ...file,
-          status: file.status === 'selected' ? 'modified' : 'selected'
-        };
-      }
-      return file;
-    }));
+    setSelectedForPush(prev => 
+      prev.includes(fileId) 
+        ? prev.filter(id => id !== fileId)
+        : [...prev, fileId]
+    );
+  };
+
+  const handleSelectAllModified = () => {
+    const allModifiedIds = pendingPushFiles.map(f => f.id);
+    const areAllSelected = allModifiedIds.every(id => selectedForPush.includes(id));
+    if (areAllSelected) {
+      setSelectedForPush(prev => prev.filter(id => !allModifiedIds.includes(id)));
+    } else {
+      setSelectedForPush(prev => {
+        const newSelection = [...prev];
+        allModifiedIds.forEach(id => {
+          if (!newSelection.includes(id)) {
+            newSelection.push(id);
+          }
+        });
+        return newSelection;
+      });
+    }
   };
   
-  const handleSaveMetadata = (fileId: string, data: { description: string; tags: string[]; author: string }) => {
-    setFiles(files.map(file => {
-      if (file.id === fileId) {
-        return { ...file, ...data };
+  const handleSaveMetadata = async (fileId: string, data: { description: string; tags: string[]; author: string }) => {
+    const backend = (window as any).backend;
+    if (backend && projectPath) {
+      const success = await backend.save_file_metadata(projectPath, fileId, data);
+      if (success) {
+        setFiles(files.map(file => {
+          if (file.id === fileId) {
+            return { ...file, ...data };
+          }
+          return file;
+        }));
+        setShowEditModal(false);
+        showToast('Metadatos persistidos en el proyecto');
+      } else {
+        showToast('Error al guardar metadatos');
       }
-      return file;
-    }));
-    setShowEditModal(false);
-    showToast('Metadatos guardados correctamente');
+    }
   };
   
   const handleGitPush = () => {
-    // Resetear estado de archivos enviados
-    setFiles(files.map(file => {
-      if (file.status === 'selected') {
-        return { ...file, status: 'normal' };
-      }
-      return file;
-    }));
-    
+    setSelectedForPush([]);
+    if (projectPath) {
+      loadProjectData(projectPath);
+    }
     setShowGitModal(false);
     showToast('¡Sincronización exitosa!');
   };
@@ -168,7 +198,7 @@ export function MainView() {
   };
   
   const selectedFile = selectedFileId ? files.find(f => f.id === selectedFileId) : null;
-  const selectedFiles = files.filter(f => f.status === 'selected');
+  const selectedFiles = files.filter(f => selectedForPush.includes(f.id));
 
   const { state } = (window as any).location_state_placeholder_fix || {}; // Simulating location state for now
   
@@ -181,12 +211,77 @@ export function MainView() {
     if (historyState && historyState.usr && historyState.usr.projectPath) {
       loadProjectData(historyState.usr.projectPath);
     }
+    fetchRecentProjects();
   }, []);
+
+  const fetchRecentProjects = async () => {
+    const backend = (window as any).backend;
+    if (backend && backend.get_recent_projects) {
+      const projects = await backend.get_recent_projects();
+      setRecentProjects(projects);
+    }
+  };
+
+  const checkGitSyncStatus = async (path: string) => {
+    const backend = (window as any).backend;
+    if (backend && backend.git_check_sync_status) {
+      try {
+        const info = await backend.git_check_sync_status(path);
+        if (info) {
+          setGitSyncInfo({ behind: info.behind || 0, ahead: info.ahead || 0 });
+        }
+      } catch (e) {
+        console.error("Error al obtener estado de sincronización:", e);
+      }
+    }
+  };
+
+  const handleGitFetch = async () => {
+    if (!projectPath) return;
+    const backend = (window as any).backend;
+    if (!backend) return;
+    setIsFetchingGit(true);
+    showToast('Buscando actualizaciones remotas...');
+    try {
+      if (backend.git_fetch) {
+        await backend.git_fetch(projectPath);
+      }
+      await checkGitSyncStatus(projectPath);
+      showToast('Estado de Git actualizado');
+    } catch (e) {
+      console.error(e);
+      showToast('Error al buscar actualizaciones');
+    } finally {
+      setIsFetchingGit(false);
+    }
+  };
+
+  const handleGitPull = async () => {
+    if (!projectPath) return;
+    const backend = (window as any).backend;
+    if (!backend || !backend.git_pull) return;
+    setIsFetchingGit(true);
+    showToast('Ejecutando git pull...');
+    try {
+      const result = await backend.git_pull(projectPath);
+      if (result === 'success') {
+        showToast('Repositorio actualizado correctamente (git pull exitoso)');
+        loadProjectData(projectPath);
+      } else {
+        showToast(`Error en git pull: ${result}`);
+      }
+    } catch (e: any) {
+      showToast(`Error al actualizar: ${e.message || e}`);
+    } finally {
+      setIsFetchingGit(false);
+    }
+  };
 
   const loadProjectData = async (path: string) => {
     const backend = (window as any).backend;
     if (!backend) return;
     
+    setSelectedForPush([]); // Limpiar selección de Git al cambiar de proyecto
     const response = await backend.get_project_data(path);
     const data = response.files;
     setIsRepo(response.isRepo);
@@ -204,10 +299,10 @@ export function MainView() {
             id: item.id,
             name: item.name,
             type: fileType,
-            status: 'uptodate',
+            status: item.status || 'uptodate',
             description: item.description,
             tags: item.tags || [],
-            author: 'Usuario Local',
+            author: item.author || 'Usuario Local',
             dateModified: 'Reciente',
             path: item.id,
             size: 'Desconocido',
@@ -228,6 +323,10 @@ export function MainView() {
     setActiveFolder(normalizedPath);
     
     showToast(`Proyecto cargado: ${path.split('/').pop()}`);
+    fetchRecentProjects();
+
+    // Comprobar estado de commits remotos
+    checkGitSyncStatus(path);
   };
 
   const handleOpenProject = async () => {
@@ -315,9 +414,37 @@ export function MainView() {
             ))}
           </div>
 
+          {/* Recent Projects Section */}
+          <div className="p-4 border-t mt-auto" style={{ borderColor: 'var(--glass-border)' }}>
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Clock className="w-3 h-3" />
+              Recientes
+            </h3>
+            <div className="space-y-1 max-h-40 overflow-y-auto scrollbar-hide">
+              {recentProjects.length > 0 ? (
+                recentProjects.filter(p => p.path !== projectPath).slice(0, 3).map((project, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => loadProjectData(project.path)}
+                    className="w-full text-left p-2 rounded-lg hover:bg-white/5 transition-all group"
+                  >
+                    <p className="text-[11px] font-bold truncate group-hover:text-blue-400" style={{ color: 'var(--text-main)' }}>
+                      {project.name}
+                    </p>
+                    <p className="text-[9px] truncate opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                      {project.path}
+                    </p>
+                  </button>
+                ))
+              ) : (
+                <p className="text-[10px] italic opacity-30 text-center py-2">Sin historial</p>
+              )}
+            </div>
+          </div>
+
           {/* Repo Pulse Section - Only if it's a repo */}
           {isRepo && (
-            <div className="p-4 mt-auto border-t" style={{ borderColor: 'var(--glass-border)' }}>
+            <div className="p-4 border-t" style={{ borderColor: 'var(--glass-border)' }}>
               <div 
                 className="rounded-xl p-4 border"
                 style={{ 
@@ -412,9 +539,55 @@ export function MainView() {
                   <Filter className="w-4 h-4" />
                 </button>
 
+                {isRepo && (
+                  <div className="flex items-center gap-2 border-r pr-4" style={{ borderColor: 'var(--border-color)' }}>
+                    <button
+                      onClick={handleGitFetch}
+                      disabled={isFetchingGit}
+                      className="p-2 rounded-xl border transition-all flex items-center justify-center hover:bg-[var(--bg-secondary)]"
+                      style={{
+                        backgroundColor: 'var(--bg-tertiary)',
+                        borderColor: 'var(--border-color)',
+                        color: 'var(--text-main)'
+                      }}
+                      title="Buscar actualizaciones remotas (git fetch)"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isFetchingGit ? 'animate-spin' : ''}`} />
+                    </button>
+
+                    <div className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-[var(--bg-tertiary)] border" style={{ borderColor: 'var(--border-color)' }}>
+                      {gitSyncInfo.behind > 0 ? (
+                        <button
+                          onClick={handleGitPull}
+                          disabled={isFetchingGit}
+                          className="flex items-center gap-1 text-amber-500 hover:text-amber-400 transition-colors animate-pulse cursor-pointer"
+                          title={`Hay ${gitSyncInfo.behind} commits pendientes de descargar. Haz clic para hacer git pull.`}
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Pull ({gitSyncInfo.behind})</span>
+                        </button>
+                      ) : (
+                        <span className="text-green-500 flex items-center gap-1" title="Al día con el repositorio remoto">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Al día</span>
+                        </span>
+                      )}
+
+                      {pendingPushCount > 0 && (
+                        <>
+                          <span className="text-slate-600 font-normal">|</span>
+                          <span className="text-blue-400 font-semibold" title={`${pendingPushCount} archivos modificados localmente`}>
+                            Push: {pendingPushCount}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <button 
                   onClick={() => setShowProjectSettings(true)}
-                  className="p-2 rounded-xl border transition-all"
+                  className="p-2 rounded-xl border transition-all hover:bg-[var(--bg-secondary)]"
                   style={{
                     backgroundColor: 'var(--bg-tertiary)',
                     borderColor: 'var(--border-color)',
@@ -462,6 +635,7 @@ export function MainView() {
                   key={file.id}
                   file={file}
                   hideBadge={!isRepo}
+                  isSelectedForPush={selectedForPush.includes(file.id)}
                   onClick={() => handleFileClick(file.id)}
                   onToggleSelection={handleToggleFileSelection}
                 />
@@ -478,8 +652,8 @@ export function MainView() {
         </main>
       </div>
       
-      {/* Floating Action Bar - Solo si es un repo y hay selección */}
-      {isRepo && selectedCount > 0 && (
+      {/* Floating Action Bar - Solo si es un repo y hay cambios pendientes de push */}
+      {isRepo && pendingPushCount > 0 && (
         <div 
           className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-400px)] max-w-4xl h-16 flex items-center justify-between px-8 rounded-2xl border shadow-2xl z-50 overflow-hidden transition-all"
           style={{ 
@@ -488,54 +662,62 @@ export function MainView() {
             backdropFilter: 'blur(10px)'
           }}
         >
-          <div className="flex items-center gap-4">
-            <div className="flex -space-x-2">
-              {[1, 2, 3].map(i => (
-                <div 
-                  key={i} 
-                  className="w-8 h-8 rounded-full border-2 flex items-center justify-center text-[10px] font-bold"
-                  style={{ 
-                    backgroundColor: 'var(--bg-tertiary)',
-                    borderColor: 'var(--bg-primary)',
-                    color: 'var(--text-main)'
-                  }}
-                >
-                  JS
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center gap-6">
             <div className="flex flex-col">
               <span 
-                className="text-sm font-bold"
+                className="text-sm font-bold flex items-center gap-2"
                 style={{ color: 'var(--text-main)' }}
               >
-                {selectedCount} archivos listos
+                {selectedCount} de {pendingPushCount} archivos seleccionados
               </span>
               <span 
                 className="text-[10px]"
                 style={{ color: 'var(--text-secondary)' }}
               >
-                Preparados para sincronizar
+                Modificados o nuevos localmente
               </span>
             </div>
+
+            {/* Seleccionar todo / deseleccionar todo */}
+            <button
+              onClick={handleSelectAllModified}
+              className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors cursor-pointer"
+            >
+              {selectedCount === pendingPushCount ? 'Deseleccionar todo' : 'Seleccionar todo'}
+            </button>
           </div>
           
-          <button
-            disabled={selectedCount === 0}
-            onClick={() => setShowGitModal(true)}
-            className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${
-              selectedCount > 0 
-                ? 'bg-blue-600 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 text-white' 
-                : ''
-            }`}
-            style={{
-              backgroundColor: selectedCount === 0 ? 'var(--bg-tertiary)' : undefined,
-              color: selectedCount === 0 ? 'var(--text-disabled)' : undefined,
-              cursor: selectedCount === 0 ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Sincronizar Repositorio
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Botón para Sincronizar Selección */}
+            <button
+              disabled={selectedCount === 0}
+              onClick={() => {
+                setGitModalFiles(selectedFiles);
+                setShowGitModal(true);
+              }}
+              className={`px-5 py-2 rounded-xl font-bold text-sm transition-all ${
+                selectedCount > 0 
+                  ? 'bg-blue-600 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20 text-white' 
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-disabled)] cursor-not-allowed'
+              }`}
+              title="Sincronizar únicamente los archivos que has seleccionado manualmente"
+            >
+              Sincronizar Selección ({selectedCount})
+            </button>
+
+            {/* Botón para Sincronizar Todo (Push Todo) */}
+            <button
+              onClick={() => {
+                setGitModalFiles(pendingPushFiles);
+                setShowGitModal(true);
+              }}
+              className="px-5 py-2 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 hover:shadow-lg hover:shadow-emerald-500/20 text-white transition-all cursor-pointer flex items-center gap-1.5"
+              title="Sincronizar absolutamente todos los archivos modificados de una sola vez (Push a todo)"
+            >
+              <GitPullRequest className="w-4 h-4" />
+              Sincronizar Todo ({pendingPushCount})
+            </button>
+          </div>
         </div>
       )}
 
@@ -560,9 +742,10 @@ export function MainView() {
       )}
       
       {/* Git Push Modal */}
-      {showGitModal && (
+      {showGitModal && projectPath && (
         <GitPushModal
-          files={selectedFiles}
+          files={gitModalFiles}
+          projectPath={projectPath}
           onClose={() => setShowGitModal(false)}
           onConfirm={handleGitPush}
         />
@@ -571,7 +754,13 @@ export function MainView() {
       {/* Project Settings Modal */}
       {showProjectSettings && (
         <ProjectSettings
+          projectPath={projectPath}
+          isRepo={isRepo}
           onClose={() => setShowProjectSettings(false)}
+          onRepoChanged={(repoState) => {
+            setIsRepo(repoState);
+            if (projectPath) loadProjectData(projectPath);
+          }}
         />
       )}
       
