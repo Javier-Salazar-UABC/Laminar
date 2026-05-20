@@ -456,14 +456,17 @@ export function MainView() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span style={{ color: 'var(--text-secondary)' }}>Modificados</span>
-                    <span className="text-amber-500 font-bold">5</span>
+                    <span className="text-amber-500 font-bold">{pendingPushCount}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span style={{ color: 'var(--text-secondary)' }}>Staged</span>
-                    <span className="text-blue-500 font-bold">2</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>Seleccionados</span>
+                    <span className="text-blue-500 font-bold">{selectedForPush.length}</span>
                   </div>
-                  <div className="w-full bg-slate-200 dark:bg-white/5 h-1 rounded-full mt-2 overflow-hidden">
-                    <div className="bg-blue-500 h-full w-[40%]" />
+                  <div className="w-full bg-slate-200 dark:bg-white/5 h-1.5 rounded-full mt-2 overflow-hidden">
+                    <div 
+                      className="bg-blue-500 h-full transition-all duration-350" 
+                      style={{ width: `${pendingPushCount > 0 ? (selectedForPush.length / pendingPushCount) * 100 : 0}%` }}
+                    />
                   </div>
                 </div>
               </div>
