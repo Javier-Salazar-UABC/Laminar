@@ -1,9 +1,29 @@
 # Historial de Cambios - Laminar
 
+## [3.0.0] - Integración Real de Git y GitHub
+**Fecha:** 20 de Mayo de 2026
+
+### Novedades Relevantes
+* **Control de Versiones Real:** Reemplazo de todas las simulaciones de Git por llamadas reales al ejecutable `git` del sistema operativo a través de subprocesos asíncronos en el backend de Python.
+* **Sincronización de Repositorios (Push):** Nueva capacidad para realizar `git add`, `git commit` y `git push` reales en el repositorio local y enviarlo a GitHub (u otro remoto) directamente desde la interfaz.
+* **Monitoreo de Estado de Archivos:** Detección automática del estado real de los archivos usando `git status --porcelain`. Los archivos son marcados visualmente como "Modificado" (`modified`), "Nuevo" (`new`), o "Al día" (`uptodate`) de forma reactiva.
+* **Inicialización y Configuración de Remotos:** Nueva interfaz en "Configuración del Proyecto" que permite inicializar repositorios Git (`git init`), ver el origen remoto actual, y vincular/cambiar la URL del repositorio remoto de GitHub (`origin`).
+* **Progreso de Sincronización en Tiempo Real:** Barra de estado dinámica paso a paso que se actualiza en tiempo real mediante señales de PyQt6 (`git_sync_progress`) durante las operaciones de git add, commit y push.
+* **Seguridad y Ejecución Background:** Todos los comandos de Git se ejecutan en hilos secundarios (`threading.Thread`) en segundo plano para evitar congelamientos de la interfaz, utilizando banderas que ocultan las consolas del sistema (`creationflags=subprocess.CREATE_NO_WINDOW`).
+
+## [2.3.0] - Persistencia de Metadatos y Accesos Rápidos
+**Fecha:** 13 de Mayo de 2026
+
+### Novedades Relevantes
+* **Metadatos Persistentes en el Proyecto:** Ahora las descripciones, etiquetas y autores se guardan en `.laminar_metadata.json` dentro de cada proyecto. Esto permite que la documentación viaje con el código aunque se mueva la carpeta.
+* **Accesos Rápidos en Sidebar:** Implementación de una sección de "Recientes" en la parte inferior de la barra lateral para saltar entre proyectos sin volver al inicio.
+* **Seguridad de Datos:** El archivo de metadatos está oculto en la interfaz para evitar ediciones accidentales pero se sincroniza automáticamente.
+* **Optimización de Carga:** Mejora en el escaneo de directorios para ignorar archivos temporales de sistema y basura (`__pycache__`, dotfiles innecesarios).
+
 ## [2.2.0] - Persistencia y Refinamiento UX
 **Fecha:** 10 de Mayo de 2026
 
-### Novedades Relevantes
+### Novedades Relevante}
 * **Sistema de Persistencia:** Implementación de guardado automático de historial de proyectos en JSON local.
 * **Dashboard Inteligente:** Pantalla de inicio dinámica que muestra los proyectos reales abiertos recientemente.
 * **Ultra-Contraste UI:** Reestructuración de la jerarquía visual para eliminar el efecto "todo blanco" y mejorar la definición de botones y paneles.
