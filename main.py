@@ -105,7 +105,20 @@ class Backend(QObject):
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    projects = json.load(f)
+                
+                # Filtrar proyectos cuya carpeta ya no existe en disco
+                valid_projects = [p for p in projects if os.path.exists(p.get('path', ''))]
+                
+                # Si se eliminó alguno, persistir la lista limpia
+                if len(valid_projects) != len(projects):
+                    try:
+                        with open(config_path, 'w', encoding='utf-8') as f:
+                            json.dump(valid_projects, f, indent=4)
+                    except Exception:
+                        pass
+                
+                return valid_projects
             except:
                 return []
         return []
@@ -135,7 +148,7 @@ class Backend(QObject):
     @pyqtSlot(str, result='QVariant')
     def get_project_data(self, root_path):
         if not root_path or not os.path.exists(root_path):
-            return {"files": [], "isRepo": False}
+            return {"files": [], "isRepo": False, "pathExists": False}
         
         is_repo = os.path.exists(os.path.join(root_path, ".git"))
         metadata_path = os.path.join(root_path, ".laminar_metadata.json")
@@ -149,6 +162,7 @@ class Backend(QObject):
                 project_metadata = {}
         
         git_statuses = {}
+        deleted_files = {}  # Archivos eliminados localmente (D en git status)
         if is_repo:
             try:
                 res = subprocess.run(
@@ -174,7 +188,9 @@ class Backend(QObject):
                         elif 'A' in status_code:
                             git_statuses[abs_path] = 'selected'
                         elif 'D' in status_code:
-                            git_statuses[abs_path] = 'error'
+                            git_statuses[abs_path] = 'deleted'
+                            # Guardar rutas relativas para los archivos eliminados
+                            deleted_files[abs_path] = file_path
             except Exception as e:
                 print(f"Error running git status: {e}")
         
@@ -221,8 +237,53 @@ class Backend(QObject):
                 print(f"Error escaneando {path}: {e}")
             return items
 
+        scanned = scan_dir(root_path)
+        
+        # Inyectar archivos eliminados en el árbol de carpetas correspondiente
+        if is_repo and deleted_files:
+            def inject_deleted_into_tree(nodes, deleted_abs_path, rel_path, file_metadata):
+                """Inserta un nodo de archivo eliminado en la posición correcta del árbol."""
+                # Calcular la carpeta padre del archivo eliminado
+                parent_abs = os.path.dirname(deleted_abs_path).replace('\\', '/')
+                
+                for node in nodes:
+                    if node.get('type') == 'folder' and node['id'] == parent_abs:
+                        # Insertar el archivo en esta carpeta
+                        node.setdefault('children', []).append(file_metadata)
+                        return True
+                    elif node.get('type') == 'folder' and node.get('children'):
+                        if inject_deleted_into_tree(node['children'], deleted_abs_path, rel_path, file_metadata):
+                            return True
+                return False
+            
+            for abs_path, rel_path in deleted_files.items():
+                file_name = os.path.basename(rel_path)
+                ext = file_name.split('.')[-1] if '.' in file_name else ''
+                m = project_metadata.get(abs_path, {})
+                deleted_node = {
+                    "id": abs_path,
+                    "name": file_name,
+                    "type": "file",
+                    "extension": ext,
+                    "status": "deleted",
+                    "description": m.get("description", f"Archivo eliminado localmente."),
+                    "tags": m.get("tags", ["eliminado"]),
+                    "author": m.get("author", "Usuario Local"),
+                }
+                
+                parent_abs = os.path.dirname(abs_path).replace('\\', '/')
+                
+                if parent_abs == root_path.replace('\\', '/'):
+                    # El archivo está en la raíz del proyecto
+                    scanned.append(deleted_node)
+                else:
+                    # Intentar insertar en el árbol; si no se encuentra la carpeta, añadir a la raíz
+                    inserted = inject_deleted_into_tree(scanned, abs_path, rel_path, deleted_node)
+                    if not inserted:
+                        scanned.append(deleted_node)
+        
         return {
-            "files": scan_dir(root_path),
+            "files": scanned,
             "isRepo": is_repo
         }
 
@@ -307,15 +368,17 @@ class Backend(QObject):
             # Step 1: Add files
             if file_paths:
                 for path in file_paths:
+                    # Usamos 'git add -A -- <path>' para manejar tanto
+                    # modificaciones/nuevos como eliminaciones (deleted).
                     subprocess.run(
-                        ["git", "add", path],
+                        ["git", "add", "-A", "--", path],
                         cwd=project_path,
                         check=True,
                         creationflags=subprocess.CREATE_NO_WINDOW
                     )
             else:
                 subprocess.run(
-                    ["git", "add", "."],
+                    ["git", "add", "-A"],
                     cwd=project_path,
                     check=True,
                     creationflags=subprocess.CREATE_NO_WINDOW
@@ -375,46 +438,84 @@ class Backend(QObject):
     @pyqtSlot(str, result='QVariant')
     def git_check_sync_status(self, project_path):
         if not project_path or not os.path.exists(project_path):
-            return {"behind": 0, "ahead": 0}
+            return {"behind": 0, "ahead": 0, "emptyRepo": False}
         
         is_repo = os.path.exists(os.path.join(project_path, ".git"))
         if not is_repo:
-            return {"behind": 0, "ahead": 0}
-            
+            return {"behind": 0, "ahead": 0, "emptyRepo": False}
+        
+        # Detectar si el repo local no tiene commits aún
+        head_check = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        has_local_commits = (head_check.returncode == 0)
+        
         behind = 0
         ahead = 0
+        empty_repo = False
+        
         try:
-            res = subprocess.run(
-                ["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"],
-                cwd=project_path,
-                capture_output=True,
-                text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
-            if res.returncode == 0:
-                parts = res.stdout.strip().split()
-                if len(parts) == 2:
-                    ahead = int(parts[0])
-                    behind = int(parts[1])
-            else:
+            if not has_local_commits:
+                # Repo vacío: hacer fetch para obtener info remota
+                empty_repo = True
+                fetch_res = subprocess.run(
+                    ["git", "fetch", "--all"],
+                    cwd=project_path,
+                    capture_output=True,
+                    text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                # Contar commits en el remoto (origin/main o origin/master)
                 for default_branch in ["origin/main", "origin/master"]:
-                    res2 = subprocess.run(
-                        ["git", "rev-list", "--left-right", "--count", f"HEAD...{default_branch}"],
+                    count_res = subprocess.run(
+                        ["git", "rev-list", "--count", default_branch],
                         cwd=project_path,
                         capture_output=True,
                         text=True,
                         creationflags=subprocess.CREATE_NO_WINDOW
                     )
-                    if res2.returncode == 0:
-                        parts = res2.stdout.strip().split()
-                        if len(parts) == 2:
-                            ahead = int(parts[0])
-                            behind = int(parts[1])
-                            break
+                    if count_res.returncode == 0:
+                        try:
+                            behind = int(count_res.stdout.strip())
+                        except ValueError:
+                            behind = 0
+                        break
+            else:
+                res = subprocess.run(
+                    ["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"],
+                    cwd=project_path,
+                    capture_output=True,
+                    text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                if res.returncode == 0:
+                    parts = res.stdout.strip().split()
+                    if len(parts) == 2:
+                        ahead = int(parts[0])
+                        behind = int(parts[1])
+                else:
+                    for default_branch in ["origin/main", "origin/master"]:
+                        res2 = subprocess.run(
+                            ["git", "rev-list", "--left-right", "--count", f"HEAD...{default_branch}"],
+                            cwd=project_path,
+                            capture_output=True,
+                            text=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW
+                        )
+                        if res2.returncode == 0:
+                            parts = res2.stdout.strip().split()
+                            if len(parts) == 2:
+                                ahead = int(parts[0])
+                                behind = int(parts[1])
+                                break
         except Exception as e:
             print(f"Error checking sync status: {e}")
             
-        return {"behind": behind, "ahead": ahead}
+        return {"behind": behind, "ahead": ahead, "emptyRepo": empty_repo}
 
     @pyqtSlot(str, result=bool)
     def git_fetch(self, project_path):
@@ -437,17 +538,48 @@ class Backend(QObject):
         if not project_path or not os.path.exists(project_path):
             return "Ruta de proyecto inválida."
         try:
-            res = subprocess.run(
-                ["git", "pull"],
+            # Verificar si el repo tiene commits locales
+            head_check = subprocess.run(
+                ["git", "rev-parse", "--verify", "HEAD"],
                 cwd=project_path,
                 capture_output=True,
                 text=True,
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
-            if res.returncode == 0:
-                return "success"
+            has_local_commits = (head_check.returncode == 0)
+            
+            if not has_local_commits:
+                # Repo vacío: intentar pull inicial desde origin/main o origin/master
+                for branch in ["main", "master"]:
+                    res = subprocess.run(
+                        ["git", "pull", "origin", branch, "--allow-unrelated-histories"],
+                        cwd=project_path,
+                        capture_output=True,
+                        text=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+                    if res.returncode == 0:
+                        # Establecer la rama de seguimiento
+                        subprocess.run(
+                            ["git", "branch", "--set-upstream-to", f"origin/{branch}", branch],
+                            cwd=project_path,
+                            capture_output=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW
+                        )
+                        return "success"
+                return "No se pudo obtener del remoto. Verifica la URL y que la rama 'main' o 'master' exista."
             else:
-                return res.stderr.strip() or res.stdout.strip() or "Error al ejecutar git pull"
+                res = subprocess.run(
+                    ["git", "pull"],
+                    cwd=project_path,
+                    capture_output=True,
+                    text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                if res.returncode == 0:
+                    return "success"
+                else:
+                    return res.stderr.strip() or res.stdout.strip() or "Error al ejecutar git pull"
         except Exception as e:
             return str(e)
 

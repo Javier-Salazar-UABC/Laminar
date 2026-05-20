@@ -1,6 +1,6 @@
 import { FileMetadata } from '../data/mockData';
 import { Pill } from './Pill';
-import { FileCode, CheckCircle2, Edit3, Clock, AlertCircle, Sparkles, Archive } from 'lucide-react';
+import { FileCode, CheckCircle2, Edit3, Clock, AlertCircle, Sparkles, Archive, Trash2 } from 'lucide-react';
 import { 
   SiPython, 
   SiJavascript, 
@@ -168,6 +168,22 @@ const StatusBadge = ({ status }: { status: string }) => {
     );
   }
   
+  if (status === 'deleted') {
+    return (
+      <div 
+        className="flex items-center gap-1 px-2 py-0.5 rounded text-xs"
+        style={{ 
+          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+          border: '1px solid #EF4444',
+          color: '#EF4444'
+        }}
+      >
+        <Trash2 className="w-3 h-3" />
+        <span>Eliminado</span>
+      </div>
+    );
+  }
+  
   return null;
 };
 
@@ -175,6 +191,7 @@ export function FileCard({ file, onSelect, onClick, onToggleSelection, hideBadge
   const isModified = file.status === 'modified';
   const isSelected = !!isSelectedForPush;
   const isError = file.status === 'error';
+  const isDeleted = file.status === 'deleted';
   const hasStatus = file.status !== 'normal' && !hideBadge;
   
   const canSelect = file.status !== 'uptodate' && !hideBadge;
@@ -187,12 +204,15 @@ export function FileCard({ file, onSelect, onClick, onToggleSelection, hideBadge
     ? `1px solid var(--border-color)`
     : `1px solid var(--border-color)`;
   
-  const leftBorder = isModified && !isSelected && !isError ? '3px solid var(--amber)' 
+  const leftBorder = isModified && !isSelected && !isError && !isDeleted ? '3px solid var(--amber)' 
     : isError && !isSelected ? '3px solid #D32F2F'
+    : isDeleted && !isSelected ? '3px solid #EF4444'
     : 'none';
   
   const backgroundColor = isSelected 
     ? 'rgba(45, 27, 78, 0.5)' 
+    : isDeleted
+    ? 'rgba(239, 68, 68, 0.07)'
     : isError
     ? 'rgba(211, 47, 47, 0.05)'
     : 'var(--bg-secondary)';
@@ -207,12 +227,13 @@ export function FileCard({ file, onSelect, onClick, onToggleSelection, hideBadge
       onClick={onClick}
       className="p-5 cursor-pointer transition-all duration-300 relative group border hover:shadow-premium"
       style={{
-        borderColor: isSelected ? 'var(--accent-blue)' : 'var(--glass-border)',
+        borderColor: isSelected ? 'var(--accent-blue)' : isDeleted ? '#EF4444' : 'var(--glass-border)',
         borderRadius: 'var(--radius-card)',
-        backgroundColor: isSelected ? 'var(--accent-blue-glow)' : 'var(--glass-bg)',
+        backgroundColor: isSelected ? 'var(--accent-blue-glow)' : isDeleted ? 'rgba(239, 68, 68, 0.07)' : 'var(--glass-bg)',
         backdropFilter: 'var(--glass-blur)',
         transform: 'translateY(0)',
-        fontFamily: 'var(--font-family-base)'
+        fontFamily: 'var(--font-family-base)',
+        opacity: isDeleted ? 0.85 : 1,
       }}
       onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
       onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}

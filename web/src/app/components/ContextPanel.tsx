@@ -1,4 +1,4 @@
-import { X, Code2 } from 'lucide-react';
+import { X, Code2, Trash2 } from 'lucide-react';
 import { FileMetadata } from '../data/mockData';
 import { Pill } from './Pill';
 import { Button } from './Button';
@@ -10,10 +10,13 @@ interface ContextPanelProps {
   onEdit: () => void;
   onToggleSelection: (fileId: string) => void;
   onOpenInVSCode?: () => void;
+  isSelectedForPush?: boolean;
 }
 
-export function ContextPanel({ file, onClose, onEdit, onToggleSelection, onOpenInVSCode }: ContextPanelProps) {
-  const isSelected = file.status === 'selected';
+export function ContextPanel({ file, onClose, onEdit, onToggleSelection, onOpenInVSCode, isSelectedForPush }: ContextPanelProps) {
+  const isChecked = !!isSelectedForPush;
+  const isDeleted = file.status === 'deleted';
+  const canSync = file.status !== 'uptodate' && file.status !== 'normal' && file.status !== 'deprecated';
   
   return (
     <>
@@ -59,13 +62,15 @@ export function ContextPanel({ file, onClose, onEdit, onToggleSelection, onOpenI
           {/* File name */}
           <div>
             <h1 
-              className="mb-2"
+              className="mb-2 flex items-center gap-2"
               style={{ 
                 fontSize: '24px',
-                color: 'var(--text-main)',
-                fontWeight: 600
+                color: isDeleted ? '#EF4444' : 'var(--text-main)',
+                fontWeight: 600,
+                textDecoration: isDeleted ? 'line-through' : 'none'
               }}
             >
+              {isDeleted && <Trash2 className="w-5 h-5" style={{ color: '#EF4444' }} />}
               {file.name}
             </h1>
             <p 
@@ -120,8 +125,8 @@ export function ContextPanel({ file, onClose, onEdit, onToggleSelection, onOpenI
             Modificar Contexto
           </Button>
           
-          {/* Open in VS Code button */}
-          {onOpenInVSCode && (
+          {/* Open in VS Code button - oculto para archivos eliminados */}
+          {onOpenInVSCode && !isDeleted && (
             <button
               onClick={onOpenInVSCode}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-[var(--radius-card)] hover:bg-[var(--bg-tertiary)] transition-colors"
@@ -155,43 +160,56 @@ export function ContextPanel({ file, onClose, onEdit, onToggleSelection, onOpenI
         </div>
         
         {/* Footer - Git selection */}
-        <div 
-          className="sticky bottom-0 p-6 border-t transition-colors"
-          style={{ 
-            backgroundColor: isSelected ? 'var(--purple-dark)' : 'var(--bg-secondary)',
-            borderColor: isSelected ? 'var(--violet)' : 'var(--border-color)',
-            borderWidth: isSelected ? '2px' : '1px'
-          }}
-        >
-          <label className="flex items-start gap-3 cursor-pointer">
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => onToggleSelection(file.id)}
-              className="mt-0.5"
-              style={{
-                borderColor: isSelected ? 'var(--violet)' : 'var(--border-color)',
-                backgroundColor: isSelected ? 'var(--violet)' : 'transparent'
-              }}
-            />
-            <div className="flex-1">
-              <p 
-                className="mb-1"
-                style={{ 
-                  color: 'var(--text-main)',
-                  fontWeight: 600
+        {canSync && (
+          <div 
+            className="sticky bottom-0 p-6 border-t transition-colors"
+            style={{ 
+              backgroundColor: isChecked 
+                ? isDeleted ? 'rgba(239,68,68,0.12)' : 'var(--purple-dark)'
+                : 'var(--bg-secondary)',
+              borderColor: isChecked 
+                ? isDeleted ? '#EF4444' : 'var(--violet)'
+                : 'var(--border-color)',
+              borderWidth: isChecked ? '2px' : '1px'
+            }}
+          >
+            <label className="flex items-start gap-3 cursor-pointer">
+              <Checkbox
+                checked={isChecked}
+                onCheckedChange={() => onToggleSelection(file.id)}
+                className="mt-0.5"
+                style={{
+                  borderColor: isChecked 
+                    ? isDeleted ? '#EF4444' : 'var(--violet)'
+                    : 'var(--border-color)',
+                  backgroundColor: isChecked 
+                    ? isDeleted ? '#EF4444' : 'var(--violet)'
+                    : 'transparent'
                 }}
-              >
-                Seleccionar para enviar a GitHub
-              </p>
-              <p 
-                className="text-xs"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                Este archivo será incluido en el próximo commit
-              </p>
-            </div>
-          </label>
-        </div>
+              />
+              <div className="flex-1">
+                <p 
+                  className="mb-1"
+                  style={{ 
+                    color: isDeleted ? '#EF4444' : 'var(--text-main)',
+                    fontWeight: 600
+                  }}
+                >
+                  {isDeleted ? 'Confirmar eliminación en GitHub' : 'Seleccionar para enviar a GitHub'}
+                </p>
+                <p 
+                  className="text-xs"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  {isDeleted 
+                    ? 'Este archivo será eliminado del repositorio remoto en el próximo commit'
+                    : 'Este archivo será incluido en el próximo commit'
+                  }
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
       </div>
     </>
   );

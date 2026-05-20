@@ -7,9 +7,10 @@ interface ProjectSettingsProps {
   isRepo: boolean;
   onClose: () => void;
   onRepoChanged: (isRepo: boolean) => void;
+  onRemoteLinked?: () => void;
 }
 
-export function ProjectSettings({ projectPath, isRepo, onClose, onRepoChanged }: ProjectSettingsProps) {
+export function ProjectSettings({ projectPath, isRepo, onClose, onRepoChanged, onRemoteLinked }: ProjectSettingsProps) {
   const [hasGit, setHasGit] = useState(isRepo);
   const [hasGitHub, setHasGitHub] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
@@ -74,6 +75,8 @@ export function ProjectSettings({ projectPath, isRepo, onClose, onRepoChanged }:
         const success = await backend.git_set_remote(projectPath, githubUrl.trim());
         if (success) {
           setHasGitHub(true);
+          // Disparar fetch + check sync en el padre para detectar archivos remotos
+          onRemoteLinked?.();
         } else {
           setErrorMessage('No se pudo vincular la URL del repositorio remoto.');
         }
@@ -84,6 +87,7 @@ export function ProjectSettings({ projectPath, isRepo, onClose, onRepoChanged }:
       }
     } else {
       setHasGitHub(true);
+      onRemoteLinked?.();
     }
   };
 

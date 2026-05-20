@@ -10,7 +10,7 @@ export interface FileMetadata {
   author: string;
   dateModified: string;
   size: string;
-  status: 'normal' | 'modified' | 'selected' | 'uptodate' | 'pending' | 'error' | 'new' | 'deprecated';
+  status: 'normal' | 'modified' | 'selected' | 'uptodate' | 'pending' | 'error' | 'new' | 'deprecated' | 'deleted';
   folder: string;
 }
 

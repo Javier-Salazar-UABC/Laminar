@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, CheckCircle, GitBranch } from 'lucide-react';
+import { X, CheckCircle, GitBranch, Trash2 } from 'lucide-react';
 import { FileMetadata } from '../data/mockData';
 import { Button } from './Button';
 
@@ -235,20 +235,29 @@ export function GitPushModal({ files, projectPath, onClose, onConfirm }: GitPush
                       className="truncate mb-0.5 text-sm"
                       style={{ 
                         color: 'var(--text-main)',
-                        fontWeight: 600
+                        fontWeight: 600,
+                        textDecoration: file.status === 'deleted' ? 'line-through' : 'none',
+                        opacity: file.status === 'deleted' ? 0.7 : 1,
                       }}
                     >
                       {file.name}
                     </p>
-                    <p 
-                      className="text-xs truncate"
-                      style={{ 
-                        color: 'var(--text-secondary)',
-                        fontFamily: 'var(--font-family-mono)'
-                      }}
-                    >
-                      {file.path}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p 
+                        className="text-xs truncate"
+                        style={{ 
+                          color: 'var(--text-secondary)',
+                          fontFamily: 'var(--font-family-mono)'
+                        }}
+                      >
+                        {file.path}
+                      </p>
+                      {file.status === 'deleted' && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid #EF4444' }}>
+                          <Trash2 className="w-2.5 h-2.5" /> Eliminado
+                        </span>
+                      )}
+                    </div>
                   </div>
                   
                   <button

@@ -33,11 +33,11 @@ export function MainView() {
   const [showFilters, setShowFilters] = useState(false);
   const [recentProjects, setRecentProjects] = useState<any[]>([]);
   
-  const [gitSyncInfo, setGitSyncInfo] = useState<{ behind: number; ahead: number }>({ behind: 0, ahead: 0 });
+  const [gitSyncInfo, setGitSyncInfo] = useState<{ behind: number; ahead: number; emptyRepo: boolean }>({ behind: 0, ahead: 0, emptyRepo: false });
   const [isFetchingGit, setIsFetchingGit] = useState(false);
 
   const pendingPushFiles = useMemo(() => {
-    return files.filter(f => f.status === 'modified' || f.status === 'new');
+    return files.filter(f => f.status === 'modified' || f.status === 'new' || f.status === 'deleted');
   }, [files]);
   
   const pendingPushCount = pendingPushFiles.length;
@@ -228,7 +228,11 @@ export function MainView() {
       try {
         const info = await backend.git_check_sync_status(path);
         if (info) {
-          setGitSyncInfo({ behind: info.behind || 0, ahead: info.ahead || 0 });
+          setGitSyncInfo({ 
+            behind: info.behind || 0, 
+            ahead: info.ahead || 0,
+            emptyRepo: info.emptyRepo || false
+          });
         }
       } catch (e) {
         console.error("Error al obtener estado de sincronización:", e);
@@ -284,6 +288,16 @@ export function MainView() {
     
     setSelectedForPush([]); // Limpiar selección de Git al cambiar de proyecto
     const response = await backend.get_project_data(path);
+
+    // Si el backend indica que la ruta no existe en disco
+    if (!response || response.pathExists === false) {
+      const folderName = path.split('/').pop() || path.split('\\').pop() || path;
+      showToast(`La carpeta "${folderName}" ya no existe. Eliminándola de recientes.`);
+      // fetchRecentProjects ya filtra automáticamente rutas inexistentes (backend)
+      await fetchRecentProjects();
+      return;
+    }
+
     const data = response.files;
     setIsRepo(response.isRepo);
     
@@ -565,10 +579,12 @@ export function MainView() {
                           onClick={handleGitPull}
                           disabled={isFetchingGit}
                           className="flex items-center gap-1 text-amber-500 hover:text-amber-400 transition-colors animate-pulse cursor-pointer"
-                          title={`Hay ${gitSyncInfo.behind} commits pendientes de descargar. Haz clic para hacer git pull.`}
+                          title={gitSyncInfo.emptyRepo 
+                            ? `El repositorio remoto tiene ${gitSyncInfo.behind} commits. Haz clic para descargar todos los archivos.`
+                            : `Hay ${gitSyncInfo.behind} commits pendientes de descargar. Haz clic para hacer git pull.`}
                         >
                           <Download className="w-3 h-3 sm:w-3.5 h-3.5" />
-                          <span>Pull ({gitSyncInfo.behind})</span>
+                          <span>{gitSyncInfo.emptyRepo ? `Descargar repo (${gitSyncInfo.behind})` : `Pull (${gitSyncInfo.behind})`}</span>
                         </button>
                       ) : (
                         <span className="text-green-500 flex items-center gap-1" title="Al día con el repositorio remoto">
@@ -663,6 +679,7 @@ export function MainView() {
                   <option value="all">Todos</option>
                   <option value="modified">Modificados</option>
                   <option value="new">Nuevos</option>
+                  <option value="deleted">Eliminados</option>
                   <option value="uptodate">Al día</option>
                 </select>
               </div>
@@ -698,6 +715,64 @@ export function MainView() {
             </div>
           )}
 
+          {/* Banner de Pull Inicial - repo vacío conectado a remoto con contenido */}
+          {isRepo && gitSyncInfo.emptyRepo && gitSyncInfo.behind > 0 && files.length === 0 && (
+            <div
+              className="mx-8 mt-8 mb-4 rounded-2xl border overflow-hidden"
+              style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                borderColor: 'rgba(245, 158, 11, 0.4)',
+              }}
+            >
+              {/* Barra superior decorativa */}
+              <div className="h-1" style={{ backgroundColor: '#F59E0B' }} />
+              <div className="p-8 flex flex-col items-center text-center gap-5">
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  style={{ backgroundColor: 'rgba(245,158,11,0.15)', border: '2px solid rgba(245,158,11,0.4)' }}
+                >
+                  <Download className="w-8 h-8" style={{ color: '#F59E0B' }} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-main)' }}>
+                    Repositorio remoto con archivos detectado
+                  </h3>
+                  <p className="text-sm max-w-md" style={{ color: 'var(--text-secondary)' }}>
+                    Tu carpeta local está conectada a un repositorio que ya tiene{' '}
+                    <span className="font-bold" style={{ color: '#F59E0B' }}>{gitSyncInfo.behind} commit{gitSyncInfo.behind !== 1 ? 's' : ''}</span>.
+                    Descarga el contenido del repositorio para empezar a trabajar.
+                  </p>
+                </div>
+                <button
+                  onClick={handleGitPull}
+                  disabled={isFetchingGit}
+                  className="flex items-center gap-3 px-8 py-3 rounded-xl font-bold text-sm transition-all"
+                  style={{
+                    backgroundColor: isFetchingGit ? 'rgba(245,158,11,0.3)' : '#F59E0B',
+                    color: '#000',
+                    opacity: isFetchingGit ? 0.7 : 1,
+                    boxShadow: isFetchingGit ? 'none' : '0 0 24px rgba(245,158,11,0.35)'
+                  }}
+                >
+                  {isFetchingGit ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Descargando archivos...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      Descargar repositorio ({gitSyncInfo.behind} commit{gitSyncInfo.behind !== 1 ? 's' : ''})
+                    </>
+                  )}
+                </button>
+                <p className="text-xs" style={{ color: 'var(--text-disabled)' }}>
+                  Equivalente a: <code className="font-mono" style={{ color: 'var(--text-secondary)' }}>git pull origin main</code>
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Scrollable Grid */}
           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 pb-24">
@@ -713,7 +788,7 @@ export function MainView() {
               ))}
             </div>
 
-            {filteredFiles.length === 0 && (
+            {filteredFiles.length === 0 && !gitSyncInfo.emptyRepo && (
               <div className="flex flex-col items-center justify-center py-20 opacity-30">
                 <Archive className="w-16 h-16 mb-4" />
                 <p className="text-lg font-medium">No se encontraron archivos</p>
@@ -800,6 +875,7 @@ export function MainView() {
           onEdit={() => setShowEditModal(true)}
           onToggleSelection={handleToggleFileSelection}
           onOpenInVSCode={() => handleOpenInVSCode(selectedFile.id)}
+          isSelectedForPush={selectedForPush.includes(selectedFile.id)}
         />
       )}
       
@@ -831,6 +907,12 @@ export function MainView() {
           onRepoChanged={(repoState) => {
             setIsRepo(repoState);
             if (projectPath) loadProjectData(projectPath);
+          }}
+          onRemoteLinked={async () => {
+            if (projectPath) {
+              showToast('Repositorio remoto vinculado. Buscando archivos remotos...');
+              await checkGitSyncStatus(projectPath);
+            }
           }}
         />
       )}
