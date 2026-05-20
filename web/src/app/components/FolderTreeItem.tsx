@@ -9,6 +9,16 @@ interface FolderTreeItemProps {
   onToggle?: (folderId: string) => void;
 }
 
+const hasUnsyncedChanges = (node: FolderNode): boolean => {
+  if (node.type === 'file') {
+    return node.status === 'modified' || node.status === 'new';
+  }
+  if (node.children && node.children.length > 0) {
+    return node.children.some(child => hasUnsyncedChanges(child));
+  }
+  return false;
+};
+
 export function FolderTreeItem({ 
   node, 
   level = 0, 
@@ -19,7 +29,6 @@ export function FolderTreeItem({
   // Una carpeta es tal si su tipo es folder O si tiene hijos definidos
   const isFolder = node.type === 'folder' || (node.children && node.children.length >= 0);
   const isActive = activeFolder === node.id;
-  const hasChildren = node.children && node.children.length > 0;
   
   return (
     <div>
@@ -56,13 +65,20 @@ export function FolderTreeItem({
         )}
         
         <span 
-          className="text-sm"
+          className="text-sm pr-6 truncate"
           style={{ 
             color: isActive ? 'var(--text-main)' : 'var(--text-secondary)'
           }}
         >
           {node.name}
         </span>
+
+        {isFolder && hasUnsyncedChanges(node) && (
+          <span 
+            className="w-2 h-2 rounded-full bg-amber-500 absolute right-4 top-1/2 -translate-y-1/2 animate-pulse"
+            title="Contiene archivos modificados o nuevos localmente"
+          />
+        )}
       </div>
       
       {node.isOpen && node.children && (

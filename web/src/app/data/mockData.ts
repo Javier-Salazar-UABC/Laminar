@@ -21,6 +21,7 @@ export interface FolderNode {
   type: 'folder' | 'file';
   children?: FolderNode[];
   isOpen?: boolean;
+  status?: string;
 }
 
 export interface Project {

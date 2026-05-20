@@ -627,6 +627,73 @@ export function MainView() {
             </div>
           </div>
 
+          {/* Animated Filter Bar */}
+          {showFilters && (
+            <div 
+              className="px-8 py-3 border-b flex flex-wrap items-center gap-6 transition-all duration-300 ease-in-out bg-[var(--glass-bg)]"
+              style={{ borderColor: 'var(--glass-border)', backdropFilter: 'blur(10px)' }}
+            >
+              {/* Type Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tipo:</span>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border bg-[var(--bg-tertiary)] border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                >
+                  <option value="all">Todos</option>
+                  {allTypes.map(type => (
+                    <option key={type} value={type}>{type.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Estado Git:</span>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border bg-[var(--bg-tertiary)] border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                >
+                  <option value="all">Todos</option>
+                  <option value="modified">Modificados</option>
+                  <option value="new">Nuevos</option>
+                  <option value="uptodate">Al día</option>
+                </select>
+              </div>
+
+              {/* Tag Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Etiqueta:</span>
+                <select
+                  value={filterTag}
+                  onChange={(e) => setFilterTag(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border bg-[var(--bg-tertiary)] border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                >
+                  <option value="all">Todas</option>
+                  {allTags.map(tag => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Reset Filters button */}
+              {(filterType !== 'all' || filterStatus !== 'all' || filterTag !== 'all') && (
+                <button
+                  onClick={() => {
+                    setFilterType('all');
+                    setFilterStatus('all');
+                    setFilterTag('all');
+                  }}
+                  className="text-xs text-red-400 hover:text-red-300 font-bold transition-colors ml-auto cursor-pointer"
+                >
+                  Limpiar Filtros
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Scrollable Grid */}
           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 pb-24">

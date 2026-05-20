@@ -9,6 +9,8 @@
 * **Selección Masiva Inteligente:** Capacidad para seleccionar o deseleccionar todos los archivos modificados a la vez desde la barra de acciones flotante.
 * **Detección de Commits Entrantes (Behind) y Salientes (Ahead):** Notificación visual interactiva al usuario cuando hay commits nuevos disponibles para descargar en el servidor de GitHub.
 * **Carga de Proyectos Recientes en Pantalla de Inicio:** Resuelto un problema asíncrono (race condition) al iniciar la aplicación que impedía mostrar los proyectos recientes en la pantalla de bienvenida antes de inicializar por completo `QWebChannel`.
+* **Panel de Filtros Interactivos:** Habilitado el panel de filtros debajo de la barra de navegación para permitir búsquedas cruzadas por extensión/tipo de archivo, estado de Git (`modified`, `new`, `uptodate`) y etiquetas asociadas.
+* **Indicador de Cambios en Carpetas (Sidebar):** Implementado un punto ámbar pulsante en el árbol de carpetas lateral que se propaga recursivamente si cualquiera de los archivos internos del subdirectorio tiene cambios pendientes de subir a Git.
 
 ### Documentación de Nuevas Funciones del Backend (Python)
 A continuación se detalla la implementación y funcionamiento de cada nueva función expuesta al frontend mediante la API de `pywebview`:
