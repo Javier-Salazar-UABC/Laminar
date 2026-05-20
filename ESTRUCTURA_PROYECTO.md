@@ -77,3 +77,4 @@ La aplicación mantiene el estado del usuario fuera del directorio del proyecto 
 1.  **Frontend**: Se desarrolla en la carpeta `web`. Al terminar cambios, se ejecuta `npm run build` para generar la carpeta `dist`.
 2.  **Producción**: `main.py` lee la carpeta `dist` y la muestra en la ventana nativa.
 3.  **Comunicación**: Cualquier acción en la UI que requiera interactuar con el PC (como abrir VS Code o hacer un commit) viaja a través del objeto `backend` registrado en el sistema.
+holaasdad
