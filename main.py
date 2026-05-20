@@ -16,6 +16,8 @@ from PyQt6.QtWebEngineCore import QWebEnginePage
 from PyQt6.QtWebChannel import QWebChannel
 
 class Backend(QObject):
+    git_sync_progress = pyqtSignal(str)
+
     def __init__(self, window):
         super().__init__()
         self.window = window
@@ -51,14 +53,15 @@ class Backend(QObject):
         except Exception as e:
             print(f"Error abriendo VS Code: {e}")
 
-    @pyqtSlot(str)
-    def sync_repository(self, mensaje):
-        print(f"Iniciando sincronización profesional con el mensaje: {mensaje}")
+    @pyqtSlot(str, str, list)
+    def sync_repository(self, project_path, mensaje, file_paths):
+        print(f"Iniciando sincronización para {project_path} con el mensaje: {mensaje}")
         try:
             # Ejecución en segundo plano para no bloquear la UI
-            threading.Thread(target=self._run_git_commands, args=(mensaje,), daemon=True).start()
+            threading.Thread(target=self._run_git_commands, args=(project_path, mensaje, file_paths), daemon=True).start()
         except Exception as e:
             print(f"Error iniciando hilo de sincronización: {e}")
+            self.git_sync_progress.emit(json.dumps({"status": "error", "message": str(e)}))
 
     @pyqtSlot(result=str)
     def select_folder(self):
@@ -107,22 +110,84 @@ class Backend(QObject):
                 return []
         return []
 
+    @pyqtSlot(str, str, 'QVariant')
+    def save_file_metadata(self, project_path, file_id, metadata):
+        metadata_path = os.path.join(project_path, ".laminar_metadata.json")
+        all_metadata = {}
+        
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    all_metadata = json.load(f)
+            except:
+                all_metadata = {}
+        
+        all_metadata[file_id] = metadata
+        
+        try:
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                json.dump(all_metadata, f, indent=4)
+            return True
+        except Exception as e:
+            print(f"Error guardando metadatos: {e}")
+            return False
+
     @pyqtSlot(str, result='QVariant')
     def get_project_data(self, root_path):
         if not root_path or not os.path.exists(root_path):
             return {"files": [], "isRepo": False}
         
         is_repo = os.path.exists(os.path.join(root_path, ".git"))
+        metadata_path = os.path.join(root_path, ".laminar_metadata.json")
+        project_metadata = {}
+        
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    project_metadata = json.load(f)
+            except:
+                project_metadata = {}
+        
+        git_statuses = {}
+        if is_repo:
+            try:
+                res = subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=root_path,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                for line in res.stdout.splitlines():
+                    if len(line) >= 4:
+                        status_code = line[:2]
+                        file_path = line[3:].strip()
+                        if file_path.startswith('"') and file_path.endswith('"'):
+                            file_path = file_path[1:-1]
+                        abs_path = os.path.abspath(os.path.join(root_path, file_path)).replace('\\', '/')
+                        
+                        if 'M' in status_code:
+                            git_statuses[abs_path] = 'modified'
+                        elif '?' in status_code:
+                            git_statuses[abs_path] = 'new'
+                        elif 'A' in status_code:
+                            git_statuses[abs_path] = 'selected'
+                        elif 'D' in status_code:
+                            git_statuses[abs_path] = 'error'
+            except Exception as e:
+                print(f"Error running git status: {e}")
         
         def scan_dir(path):
             items = []
             try:
                 for entry in os.scandir(path):
-                    if entry.name.startswith('.') or entry.name == 'node_modules':
+                    if entry.name.startswith('.') or entry.name == 'node_modules' or entry.name == '__pycache__':
                         continue
                         
+                    item_id = entry.path.replace('\\', '/')
                     item = {
-                        "id": entry.path.replace('\\', '/'),
+                        "id": item_id,
                         "name": entry.name,
                     }
                     
@@ -133,9 +198,23 @@ class Backend(QObject):
                     else:
                         item["type"] = "file"
                         item["extension"] = entry.name.split('.')[-1] if '.' in entry.name else ""
-                        item["status"] = "uptodate"
-                        item["description"] = f"Archivo {item['extension']} del proyecto."
-                        item["tags"] = ["local"]
+                        
+                        # Match status from git status
+                        if item_id in git_statuses:
+                            item["status"] = git_statuses[item_id]
+                        else:
+                            item["status"] = "uptodate"
+                        
+                        # Cargar metadatos persistidos o usar por defecto
+                        if item_id in project_metadata:
+                            m = project_metadata[item_id]
+                            item["description"] = m.get("description", f"Archivo {item['extension']} del proyecto.")
+                            item["tags"] = m.get("tags", ["local"])
+                            item["author"] = m.get("author", "Usuario Local")
+                        else:
+                            item["description"] = f"Archivo {item['extension']} del proyecto."
+                            item["tags"] = ["local"]
+                            item["author"] = "Usuario Local"
                     
                     items.append(item)
             except Exception as e:
@@ -147,14 +226,151 @@ class Backend(QObject):
             "isRepo": is_repo
         }
 
-    def _run_git_commands(self, mensaje):
+    @pyqtSlot(str, result=bool)
+    def git_init(self, project_path):
+        if not project_path or not os.path.exists(project_path):
+            return False
         try:
-            subprocess.run(["git", "add", "."], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            subprocess.run(["git", "commit", "-m", mensaje], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            subprocess.run(["git", "push"], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            print("¡Éxito! Repositorio sincronizado vía QWebChannel.")
+            subprocess.run(
+                ["git", "init"],
+                cwd=project_path,
+                check=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            return True
+        except Exception as e:
+            print(f"Error in git init: {e}")
+            return False
+
+    @pyqtSlot(str, result=str)
+    def git_get_remote(self, project_path):
+        if not project_path or not os.path.exists(project_path):
+            return ""
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+                check=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            return result.stdout.strip()
+        except Exception:
+            return ""
+
+    @pyqtSlot(str, str, result=bool)
+    def git_set_remote(self, project_path, remote_url):
+        if not project_path or not os.path.exists(project_path):
+            return False
+        try:
+            check_remote = subprocess.run(
+                ["git", "remote"],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            remotes = check_remote.stdout.split()
+            if "origin" in remotes:
+                if remote_url.strip():
+                    subprocess.run(
+                        ["git", "remote", "set-url", "origin", remote_url],
+                        cwd=project_path,
+                        check=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+                else:
+                    subprocess.run(
+                        ["git", "remote", "remove", "origin"],
+                        cwd=project_path,
+                        check=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+            else:
+                if remote_url.strip():
+                    subprocess.run(
+                        ["git", "remote", "add", "origin", remote_url],
+                        cwd=project_path,
+                        check=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+            return True
+        except Exception as e:
+            print(f"Error en git_set_remote: {e}")
+            return False
+
+    def _run_git_commands(self, project_path, mensaje, file_paths):
+        try:
+            self.git_sync_progress.emit(json.dumps({"status": "started"}))
+            
+            # Step 1: Add files
+            if file_paths:
+                for path in file_paths:
+                    subprocess.run(
+                        ["git", "add", path],
+                        cwd=project_path,
+                        check=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+            else:
+                subprocess.run(
+                    ["git", "add", "."],
+                    cwd=project_path,
+                    check=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+            self.git_sync_progress.emit(json.dumps({"status": "added"}))
+            
+            # Step 2: Commit
+            subprocess.run(
+                ["git", "commit", "-m", mensaje],
+                cwd=project_path,
+                check=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            self.git_sync_progress.emit(json.dumps({"status": "committed"}))
+            
+            # Step 3: Branch detection
+            branch_result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+                check=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            branch = branch_result.stdout.strip() or "main"
+            
+            # Step 4: Push to origin
+            remote_result = subprocess.run(
+                ["git", "remote"],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+                check=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if "origin" not in remote_result.stdout:
+                raise Exception("No se ha configurado el repositorio remoto 'origin'. Ve a la Configuración del Proyecto.")
+
+            push_res = subprocess.run(
+                ["git", "push", "-u", "origin", branch],
+                cwd=project_path,
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if push_res.returncode != 0:
+                err_msg = push_res.stderr.strip()
+                if push_res.stdout:
+                    err_msg += "\n" + push_res.stdout.strip()
+                raise Exception(err_msg)
+                
+            self.git_sync_progress.emit(json.dumps({"status": "success"}))
         except Exception as e:
             print(f"Error en ejecución Git: {e}")
+            self.git_sync_progress.emit(json.dumps({"status": "error", "message": str(e)}))
 
 class EdgeGrip(QWidget):
     def __init__(self, parent, edge):
@@ -258,9 +474,18 @@ class MainWindow(QMainWindow):
                             open_in_vscode: function(path, folderPath) { 
                                 window.backend.open_in_vscode(path, folderPath || ""); 
                             },
-                            sincronizar_github_python: function(mensaje) { 
-                                window.backend.sync_repository(mensaje);
+                            sincronizar_github_python: function(projectPath, mensaje, filePaths) { 
+                                window.backend.sync_repository(projectPath, mensaje, filePaths);
                                 return Promise.resolve("Sincronización iniciada.");
+                            },
+                            git_init: function(projectPath) {
+                                return window.backend.git_init(projectPath);
+                            },
+                            git_get_remote: function(projectPath) {
+                                return window.backend.git_get_remote(projectPath);
+                            },
+                            git_set_remote: function(projectPath, remoteUrl) {
+                                return window.backend.git_set_remote(projectPath, remoteUrl);
                             }
                         }
                     };
