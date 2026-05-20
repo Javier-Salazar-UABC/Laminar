@@ -482,11 +482,11 @@ export function MainView() {
             className="h-16 flex items-center justify-between px-8 border-b"
             style={{ borderColor: 'var(--glass-border)' }}
           >
-            <div className="flex items-center gap-6 flex-1">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
               {/* Breadcrumbs */}
-              <div className="flex items-center gap-2 text-xs font-medium overflow-hidden">
+              <div className="flex items-center gap-2 text-xs font-medium overflow-hidden max-w-[120px] sm:max-w-[200px] md:max-w-[320px] lg:max-w-[450px] shrink">
                 <Archive className="w-4 h-4 text-slate-500 shrink-0" />
-                <div className="flex items-center gap-1 whitespace-nowrap overflow-hidden">
+                <div className="flex items-center gap-1 whitespace-nowrap overflow-hidden text-ellipsis">
                   {projectPath && activeFolder && (
                     <>
                       <button 
@@ -516,22 +516,22 @@ export function MainView() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 ml-auto">
-                <div className="relative w-64">
+              <div className="flex items-center gap-1.5 sm:gap-3 ml-auto shrink-0">
+                <div className="relative w-36 sm:w-44 md:w-56 transition-all duration-300">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <input
                     type="text"
-                    placeholder="Buscar en el proyecto..."
+                    placeholder="Buscar..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm placeholder:text-slate-400"
+                    className="w-full pl-9 pr-3 py-1.5 bg-background border border-border rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-xs sm:text-sm placeholder:text-slate-400"
                     style={{ backgroundColor: 'var(--bg-primary)' }}
                   />
                 </div>
                 
                 <button 
                   onClick={() => setShowFilters(!showFilters)}
-                  className={`p-2 rounded-xl border transition-all`}
+                  className={`p-1.5 sm:p-2 rounded-xl border transition-all`}
                   style={{
                     backgroundColor: showFilters ? 'var(--accent-blue-glow)' : 'var(--bg-tertiary)',
                     borderColor: showFilters ? 'var(--accent-blue)' : 'var(--border-color)',
@@ -539,15 +539,15 @@ export function MainView() {
                   }}
                   title="Filtros"
                 >
-                  <Filter className="w-4 h-4" />
+                  <Filter className="w-3.5 h-3.5 sm:w-4 h-4" />
                 </button>
 
                 {isRepo && (
-                  <div className="flex items-center gap-2 border-r pr-4" style={{ borderColor: 'var(--border-color)' }}>
+                  <div className="flex items-center gap-1 sm:gap-2 border-r pr-2 sm:pr-3" style={{ borderColor: 'var(--border-color)' }}>
                     <button
                       onClick={handleGitFetch}
                       disabled={isFetchingGit}
-                      className="p-2 rounded-xl border transition-all flex items-center justify-center hover:bg-[var(--bg-secondary)]"
+                      className="p-1.5 sm:p-2 rounded-xl border transition-all flex items-center justify-center hover:bg-[var(--bg-secondary)]"
                       style={{
                         backgroundColor: 'var(--bg-tertiary)',
                         borderColor: 'var(--border-color)',
@@ -555,10 +555,10 @@ export function MainView() {
                       }}
                       title="Buscar actualizaciones remotas (git fetch)"
                     >
-                      <RefreshCw className={`w-4 h-4 ${isFetchingGit ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-3.5 h-3.5 sm:w-4 h-4 ${isFetchingGit ? 'animate-spin' : ''}`} />
                     </button>
 
-                    <div className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-[var(--bg-tertiary)] border" style={{ borderColor: 'var(--border-color)' }}>
+                    <div className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold px-2 py-1.5 rounded-xl bg-[var(--bg-tertiary)] border" style={{ borderColor: 'var(--border-color)' }}>
                       {gitSyncInfo.behind > 0 ? (
                         <button
                           onClick={handleGitPull}
@@ -566,7 +566,7 @@ export function MainView() {
                           className="flex items-center gap-1 text-amber-500 hover:text-amber-400 transition-colors animate-pulse cursor-pointer"
                           title={`Hay ${gitSyncInfo.behind} commits pendientes de descargar. Haz clic para hacer git pull.`}
                         >
-                          <Download className="w-3.5 h-3.5" />
+                          <Download className="w-3 h-3 sm:w-3.5 h-3.5" />
                           <span>Pull ({gitSyncInfo.behind})</span>
                         </button>
                       ) : (
@@ -590,7 +590,7 @@ export function MainView() {
 
                 <button 
                   onClick={() => setShowProjectSettings(true)}
-                  className="p-2 rounded-xl border transition-all hover:bg-[var(--bg-secondary)]"
+                  className="p-1.5 sm:p-2 rounded-xl border transition-all hover:bg-[var(--bg-secondary)]"
                   style={{
                     backgroundColor: 'var(--bg-tertiary)',
                     borderColor: 'var(--border-color)',
@@ -598,12 +598,12 @@ export function MainView() {
                   }}
                   title="Ajustes"
                 >
-                  <Settings className="w-4 h-4" />
+                  <Settings className="w-3.5 h-3.5 sm:w-4 h-4" />
                 </button>
 
                 <button 
                   onClick={() => handleOpenInVSCode()}
-                  className="p-2 rounded-xl border transition-all"
+                  className="p-1.5 sm:p-2 rounded-xl border transition-all"
                   style={{
                     backgroundColor: 'var(--bg-tertiary)',
                     borderColor: 'var(--border-color)',
@@ -611,12 +611,12 @@ export function MainView() {
                   }}
                   title="Abrir Proyecto en VS Code"
                 >
-                  <img src="/assets/VSCodeLogo.png" className="w-4 h-4 object-contain" alt="VS Code" />
+                  <img src="/assets/VSCodeLogo.png" className="w-3.5 h-3.5 sm:w-4 h-4 object-contain" alt="VS Code" />
                 </button>
 
                 <button 
                   onClick={toggleTheme}
-                  className="p-2 rounded-xl border transition-all"
+                  className="p-1.5 sm:p-2 rounded-xl border transition-all"
                   style={{
                     backgroundColor: 'var(--bg-tertiary)',
                     borderColor: 'var(--border-color)',
@@ -624,17 +624,17 @@ export function MainView() {
                   }}
                   title={isDarkMode ? "Modo Claro" : "Modo Oscuro"}
                 >
-                  {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  {isDarkMode ? <Sun className="w-3.5 h-3.5 sm:w-4 h-4" /> : <Moon className="w-3.5 h-3.5 sm:w-4 h-4" />}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Animated Filter Bar */}
+          {/* Filter Bar */}
           {showFilters && (
             <div 
-              className="px-8 py-3 border-b flex flex-wrap items-center gap-6 transition-all duration-300 ease-in-out bg-[var(--glass-bg)]"
-              style={{ borderColor: 'var(--glass-border)', backdropFilter: 'blur(10px)' }}
+              className="px-8 py-3 border-b flex flex-wrap items-center gap-6 bg-[var(--bg-secondary)]"
+              style={{ borderColor: 'var(--border-color)' }}
             >
               {/* Type Filter */}
               <div className="flex items-center gap-2">
@@ -713,7 +713,7 @@ export function MainView() {
             </div>
 
             {filteredFiles.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full opacity-30">
+              <div className="flex flex-col items-center justify-center py-20 opacity-30">
                 <Archive className="w-16 h-16 mb-4" />
                 <p className="text-lg font-medium">No se encontraron archivos</p>
               </div>

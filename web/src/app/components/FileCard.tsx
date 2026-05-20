@@ -1,6 +1,16 @@
 import { FileMetadata } from '../data/mockData';
 import { Pill } from './Pill';
-import { FileCode, FileJson, FileText, FileType, CheckCircle2, Edit3, Clock, AlertCircle, Sparkles, Archive } from 'lucide-react';
+import { FileCode, CheckCircle2, Edit3, Clock, AlertCircle, Sparkles, Archive } from 'lucide-react';
+import { 
+  SiPython, 
+  SiJavascript, 
+  SiTypescript, 
+  SiReact, 
+  SiHtml5, 
+  SiCss, 
+  SiJson, 
+  SiMarkdown 
+} from 'react-icons/si';
 
 interface FileCardProps {
   file: FileMetadata;
@@ -23,17 +33,26 @@ const fileTypeColors: Record<string, string> = {
 };
 
 const FileIcon = ({ type }: { type: string }) => {
-  const color = fileTypeColors[type] || 'var(--text-secondary)';
-  
-  const icons = {
-    json: FileJson,
-    md: FileText,
-    default: FileCode
-  };
-  
-  const Icon = icons[type as keyof typeof icons] || icons.default;
-  
-  return <Icon className="w-8 h-8" style={{ color }} />;
+  switch (type) {
+    case 'py':
+      return <SiPython className="w-8 h-8 shrink-0 select-none" style={{ color: '#3776AB' }} />;
+    case 'js':
+      return <SiJavascript className="w-8 h-8 shrink-0 select-none" style={{ color: '#F7DF1E' }} />;
+    case 'ts':
+      return <SiTypescript className="w-8 h-8 shrink-0 select-none" style={{ color: '#3178C6' }} />;
+    case 'tsx':
+      return <SiReact className="w-8 h-8 shrink-0 select-none" style={{ color: '#61DAFB' }} />;
+    case 'html':
+      return <SiHtml5 className="w-8 h-8 shrink-0 select-none" style={{ color: '#E34F26' }} />;
+    case 'css':
+      return <SiCss className="w-8 h-8 shrink-0 select-none" style={{ color: '#1572B6' }} />;
+    case 'json':
+      return <SiJson className="w-8 h-8 shrink-0 select-none" style={{ color: '#F1C40F' }} />;
+    case 'md':
+      return <SiMarkdown className="w-8 h-8 shrink-0 select-none" style={{ color: '#E6E6E6' }} />;
+    default:
+      return <FileCode className="w-8 h-8 shrink-0 select-none" style={{ color: 'var(--text-secondary)' }} />;
+  }
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
